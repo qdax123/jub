@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>剧本字幕核对工具（最终完善版）</title>
+    
+    <style>
+        :root {
+            --color-primary: #4F46E5;
+            --color-primary-hover: #4338CA;
+            --color-primary-light: #EEF2FF;
+            --color-bg: #F9FAFB;
+            --color-surface: #FFFFFF;
+            --color-text: #1F2937;
+            --color-text-secondary: #6B7280;
+            --color-border: #E5E7EB;
+            --color-success: #10B981;
+            --color-error: #EF4444;
+            --color-warning: #F59E0B;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+            --transition: 0.25s ease;
+            --font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            --max-width: 1200px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container { width: 100%; max-width: var(--max-width); margin: 0 auto; padding: 20px; flex: 1; }
+
+        header { text-align: center; margin-bottom: 24px; }
+        header h1 { font-size: 1.6rem; font-weight: 700; color: var(--color-primary); margin-bottom: 6px; }
+        header p { color: var(--color-text-secondary); font-size: 0.9rem; }
+
+        .workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        .textarea-group { display: flex; flex-direction: column; }
+        .textarea-group label { font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .badge { background-color: var(--color-primary-light); color: var(--color-primary); padding: 2px 10px; border-radius: 100px; font-size: 0.72rem; font-weight: 600; }
+        .textarea-group textarea {
+            flex: 1; min-height: 260px; padding: 12px; border: 2px solid var(--color-border);
+            border-radius: var(--radius-md); font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 0.85rem; line-height: 1.5; resize: vertical; background-color: var(--color-surface);
+            color: var(--color-text); transition: border-color var(--transition);
+        }
+        .textarea-group textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+
+        .action-bar { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 10px 20px; border-radius: var(--radius-md); font-weight: 600; font-size: 0.9rem;
+            transition: all var(--transition); border: 2px solid transparent; cursor: pointer;
+        }
+        .btn--primary { background-color: var(--color-primary); color: #fff; box-shadow: 0 4px 12px rgba(79,70,229,0.3); }
+        .btn--primary:hover { background-color: var(--color-primary-hover); transform: translateY(-1px); }
+        .btn--outline { background-color: transparent; color: var(--color-primary); border-color: var(--color-primary); }
+        .btn--outline:hover { background-color: var(--color-primary-light); }
+
+        .results { background-color: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 20px; margin-bottom: 16px; }
+        .results__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+        .results__title { font-size: 1.1rem; font-weight: 700; }
+        .stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.82rem; }
+        .stat-item { display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 100px; background-color: var(--color-bg); border: 1px solid var(--color-border); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot--success { background-color: var(--color-success); }
+        .dot--error { background-color: var(--color-error); }
+        .dot--warning { background-color: var(--color-warning); }
+
+        .overall-result { padding: 14px; border-radius: var(--radius-md); margin-bottom: 14px; font-size: 0.9rem; }
+        .overall-result--match { background-color: #F0FDF4; border: 1px solid var(--color-success); color: #065F46; }
+        .overall-result--partial { background-color: #FFFBEB; border: 1px solid var(--color-warning); color: #92400E; }
+        .overall-result--mismatch { background-color: #FEF2F2; border: 1px solid var(--color-error); color: #991B1B; }
+
+        .script-line-item { display: flex; gap: 10px; padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 6px; background-color: var(--color-bg); border-left: 4px solid var(--color-border); font-size: 0.85rem; align-items: flex-start; }
+        .script-line-item--match { border-left-color: var(--color-success); background-color: #F0FDF4; }
+        .script-line-item--missing { border-left-color: var(--color-error); background-color: #FEF2F2; }
+        .script-line-item__index { min-width: 36px; font-weight: 700; color: var(--color-text-secondary); text-align: center; }
+        .script-line-item__content { flex: 1; }
+        .script-line-item__label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 2px; }
+        .script-line-item__text { word-break: break-word; }
+        .phrase-list { margin-top: 4px; font-size: 0.8rem; color: var(--color-text-secondary); }
+        .phrase-list span { display: inline-block; background-color: var(--color-primary-light); padding: 2px 6px; border-radius: 4px; margin: 2px; }
+        .phrase-list span.missing { background-color: #FEE2E2; color: var(--color-error); }
+
+        .alignment-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px; }
+        .alignment-table th, .alignment-table td { border: 1px solid var(--color-border); padding: 6px 8px; text-align: left; }
+        .alignment-table th { background-color: var(--color-bg); font-weight: 600; }
+        .alignment-table tr.covered { background-color: #F0FDF4; }
+        .alignment-table tr.extra { background-color: #FFFBEB; }
+
+        .no-results { text-align: center; color: var(--color-text-secondary); padding: 28px; font-size: 0.9rem; }
+
+        @media (max-width: 768px) {
+            .workspace { grid-template-columns: 1fr; }
+            .textarea-group textarea { min-height: 180px; }
+            .action-bar { flex-direction: column; }
+            .btn { width: 100%; }
+            .alignment-table { display: block; overflow-x: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📜 剧本字幕核对工具（最终完善版）</h1>
+            <p>短词严格边界，长词灵活匹配；表格显示每行字幕对应剧本短语</p>
+        </header>
+
+        <div class="workspace">
+            <div class="textarea-group">
+                <label for="scriptInput">剧本原文 <span class="badge">人物名：台词</span></label>
+                <textarea id="scriptInput" placeholder="粘贴剧本内容..."></textarea>
+            </div>
+            <div class="textarea-group">
+                <label for="subtitleInput">字幕文本 <span class="badge">每行一句</span></label>
+                <textarea id="subtitleInput" placeholder="粘贴字幕内容..."></textarea>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button id="compareBtn" class="btn btn--primary">🔍 核对差异</button>
+            <button id="clearBtn" class="btn btn--outline">🗑️ 清空</button>
+            <button id="extractBtn" class="btn btn--outline">📋 仅提取台词</button>
+        </div>
+
+        <div id="resultsContainer">
+            <div class="results"><div class="no-results">请粘贴剧本和字幕，然后点击“核对差异”。</div></div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            const scriptInput = document.getElementById('scriptInput');
+            const subtitleInput = document.getElementById('subtitleInput');
+            const compareBtn = document.getElementById('compareBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const extractBtn = document.getElementById('extractBtn');
+            const resultsContainer = document.getElementById('resultsContainer');
+
+            // ---------- 提取剧本台词 ----------
+            function extractLines(scriptText) {
+                const lines = scriptText.split(/\r?\n/);
+                const dialogues = [];
+                const dialogueRegex = /^(?:[A-Za-z\u4e00-\u9fa5·]+(?:[（(][^）)]*[）)])?)[：:]\s*(.+)$/;
+                const metaRegex = /^(?:人物|时间|地点|场景|道具|其他)[：:]/;
+
+                for (let rawLine of lines) {
+                    const line = rawLine.replace(/^[ \t\u3000]+/, '');
+                    if (!line.trim()) continue;
+                    if (/^(?:第[一二三四五六七八九十\d]+[集部章节]?|\d+[-—]?\d*)[ \t]+/.test(line.trim()) && !line.includes(':')) continue;
+                    if (/^[▲△]/.test(line)) continue;
+                    if (metaRegex.test(line)) continue;
+                    const match = line.match(dialogueRegex);
+                    if (match && match[1]) {
+                        const dialogue = match[1].trim();
+                        if (dialogue) dialogues.push(dialogue);
+                    }
+                }
+                return dialogues;
+            }
+
+            // ---------- 解析字幕 ----------
+            function parseSubtitle(subtitleText) {
+                return subtitleText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+            }
+
+            // ---------- 规范化文本 ----------
+            function normalizeText(str) {
+                return str.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '');
+            }
+
+            // ---------- 判断字符是否为中文字母数字 ----------
+            function isAlphanumeric(char) {
+                return /[\u4e00-\u9fa5A-Za-z0-9]/.test(char);
+            }
+
+            // ---------- 分级短语匹配 ----------
+            function hasPhraseMatch(fullText, phrase) {
+                const normPhrase = normalizeText(phrase);
+                if (!normPhrase) return false;
+                const text = fullText;
+                if (normPhrase.length <= 2) {
+                    // 严格边界
+                    let searchFrom = 0;
+                    while (searchFrom < text.length) {
+                        const idx = text.indexOf(normPhrase, searchFrom);
+                        if (idx === -1) return false;
+                        const charBefore = idx > 0 ? text[idx - 1] : '';
+                        const charAfter = idx + normPhrase.length < text.length ? text[idx + normPhrase.length] : '';
+                        if (!isAlphanumeric(charBefore) && !isAlphanumeric(charAfter)) return true;
+                        searchFrom = idx + normPhrase.length;
+                    }
+                    return false;
+                } else {
+                    return text.includes(normPhrase);
+                }
+            }
+
+            // ---------- 拆分短语 ----------
+            function splitIntoPhrases(text) {
+                return text.split(/[，。！？；：、,.!?;:]+/).map(s => s.trim()).filter(s => s.length > 0);
+            }
+
+            // ---------- 转义 HTML ----------
+            function escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            // ---------- 核心分析 ----------
+            function analyze(scriptLines, subtitleLines) {
+                const rawSubtitleFull = subtitleLines.join('\n');
+                const normSubtitleFull = normalizeText(subtitleLines.join(''));
+
+                const scriptResults = [];
+                const allPhrases = [];
+
+                // 收集所有短语（用于字幕行覆盖判断）
+                for (const scriptLine of scriptLines) {
+                    const phrases = splitIntoPhrases(scriptLine);
+                    allPhrases.push(...phrases);
+                }
+
+                // 剧本逐句核对
+                for (const scriptLine of scriptLines) {
+                    const phrases = splitIntoPhrases(scriptLine);
+                    const missingPhrases = [];
+                    const foundPhrases = [];
+                    for (const phrase of phrases) {
+                        if (hasPhraseMatch(rawSubtitleFull, phrase) || hasPhraseMatch(normSubtitleFull, phrase)) {
+                            foundPhrases.push(phrase);
+                        } else {
+                            missingPhrases.push(phrase);
+                        }
+                    }
+                    scriptResults.push({
+                        script: scriptLine,
+                        phrases: phrases,
+                        foundPhrases: foundPhrases,
+                        missingPhrases: missingPhrases,
+                        found: missingPhrases.length === 0
+                    });
+                }
+
+                // 字幕行覆盖判断：每行匹配到的短语列表
+                const subtitleLineInfo = subtitleLines.map(line => {
+                    const normLine = normalizeText(line);
+                    if (!normLine) return { covered: false, phrases: [] };
+                    const matchedPhrases = [];
+                    for (const phrase of allPhrases) {
+                        const normPhrase = normalizeText(phrase);
+                        if (normPhrase.length <= 2) {
+                            // 短词：要求行与短语相等，或短语在行中独立出现
+                            if (normLine === normPhrase) matchedPhrases.push(phrase);
+                            else if (hasPhraseMatch(normLine, phrase)) matchedPhrases.push(phrase);
+                        } else {
+                            // 长词：允许包含关系（短语包含行，或行包含短语）
+                            if (normPhrase.includes(normLine) || normLine.includes(normPhrase)) {
+                                matchedPhrases.push(phrase);
+                            }
+                        }
+                    }
+                    return {
+                        covered: matchedPhrases.length > 0,
+                        phrases: matchedPhrases
+                    };
+                });
+
+                const extraLineCount = subtitleLineInfo.filter(info => !info.covered).length;
+                const missingPhrasesSummary = scriptResults.flatMap(r => r.missingPhrases);
+
+                return {
+                    scriptResults,
+                    subtitleLineInfo,
+                    extraLineCount,
+                    missingPhrasesSummary
+                };
+            }
+
+            // ---------- 渲染结果 ----------
+            function renderResults(scriptLines, subtitleLines) {
+                const { scriptResults, subtitleLineInfo, extraLineCount, missingPhrasesSummary } = analyze(scriptLines, subtitleLines);
+                const matchedCount = scriptResults.filter(r => r.found).length;
+                const missingCount = scriptResults.filter(r => !r.found).length;
+
+                let html = '';
+
+                // 整体状态
+                if (missingCount === 0 && extraLineCount === 0) {
+                    html += `<div class="results"><div class="overall-result overall-result--match">✅ 完全匹配：剧本台词全部找到，字幕行全部被覆盖。</div></div>`;
+                } else if (missingCount === 0 && extraLineCount > 0) {
+                    html += `<div class="results"><div class="overall-result overall-result--partial">⚠️ 剧本台词全部匹配，但字幕有 ${extraLineCount} 行未被覆盖（可能多余）。</div></div>`;
+                } else {
+                    const missingStr = missingPhrasesSummary.join('、');
+                    html += `<div class="results"><div class="overall-result overall-result--mismatch">❌ 有 ${missingCount} 句剧本台词未完整匹配，缺失片段：${escapeHtml(missingStr)}</div></div>`;
+                }
+
+                // 剧本台词逐句核对
+                html += `<div class="results">`;
+                html += `<div class="results__header"><span class="results__title">剧本台词逐句核对</span>`;
+                html += `<div class="stats">`;
+                html += `<span class="stat-item"><span class="dot dot--success"></span> 匹配 ${matchedCount}</span>`;
+                html += `<span class="stat-item"><span class="dot dot--error"></span> 缺失 ${missingCount}</span>`;
+                html += `<span class="stat-item">剧本共 ${scriptLines.length} 句</span>`;
+                html += `</div></div>`;
+
+                if (scriptLines.length === 0) {
+                    html += `<div class="no-results">未从剧本中提取到台词。</div>`;
+                } else {
+                    scriptResults.forEach((r, idx) => {
+                        const cls = r.found ? 'script-line-item--match' : 'script-line-item--missing';
+                        const label = r.found ? '✅ 所有短语均在字幕中找到' : '❌ 缺失短语：' + r.missingPhrases.join('、');
+                        html += `<div class="script-line-item ${cls}">`;
+                        html += `<span class="script-line-item__index">#${idx + 1}</span>`;
+                        html += `<div class="script-line-item__content">`;
+                        html += `<span class="script-line-item__label">${label}</span>`;
+                        html += `<span class="script-line-item__text">${escapeHtml(r.script)}</span>`;
+                        html += `<div class="phrase-list">`;
+                        r.phrases.forEach(p => {
+                            const found = r.foundPhrases.includes(p);
+                            html += `<span class="${found ? '' : 'missing'}">${escapeHtml(p)}</span>`;
+                        });
+                        html += `</div>`;
+                        html += `</div></div>`;
+                    });
+                }
+                html += `</div>`;
+
+                // 字幕行覆盖情况表
+                html += `<div class="results">`;
+                html += `<div class="results__header"><span class="results__title">字幕行覆盖情况</span></div>`;
+                if (subtitleLines.length === 0) {
+                    html += `<div class="no-results">无字幕内容。</div>`;
+                } else {
+                    html += `<table class="alignment-table"><thead><tr><th>行号</th><th>字幕内容</th><th>状态</th><th>匹配的剧本短语</th></tr></thead><tbody>`;
+                    subtitleLines.forEach((line, idx) => {
+                        const info = subtitleLineInfo[idx];
+                        const isCovered = info.covered;
+                        const status = isCovered ? '✅ 被剧本覆盖' : '⚠️ 多余（未在剧本中找到）';
+                        const rowClass = isCovered ? 'covered' : 'extra';
+                        const phraseText = info.phrases.length > 0 ? info.phrases.join('、') : '无';
+                        html += `<tr class="${rowClass}"><td>#${idx + 1}</td><td>${escapeHtml(line)}</td><td>${status}</td><td>${escapeHtml(phraseText)}</td></tr>`;
+                    });
+                    html += `</tbody></table>`;
+                }
+                html += `</div>`;
+
+                resultsContainer.innerHTML = html;
+            }
+
+            // ---------- 仅提取台词 ----------
+            function handleExtractOnly() {
+                const scriptText = scriptInput.value.trim();
+                if (!scriptText) {
+                    resultsContainer.innerHTML = `<div class="results"><div class="no-results">请先粘贴剧本原文。</div></div>`;
+                    return;
+                }
+                const scriptLines = extractLines(scriptText);
+                if (scriptLines.length === 0) {
+                    resultsContainer.innerHTML = `<div class="results"><div class="no-results">未能提取到台词，请检查格式。</div></div>`;
+                    return;
+                }
+                let html = `<div class="results"><div class="results__header"><span class="results__title">提取的台词（${scriptLines.length} 句）</span></div><ol style="padding-left:20px;">`;
+                scriptLines.forEach(l => { html += `<li style="margin-bottom:4px;">${escapeHtml(l)}</li>`; });
+                html += `</ol></div>`;
+                resultsContainer.innerHTML = html;
+            }
+
+            function handleClear() {
+                scriptInput.value = '';
+                subtitleInput.value = '';
+                resultsContainer.innerHTML = `<div class="results"><div class="no-results">请粘贴剧本和字幕，然后点击“核对差异”。</div></div>`;
+                scriptInput.focus();
+            }
+
+            function handleCompare() {
+                const scriptText = scriptInput.value.trim();
+                const subtitleText = subtitleInput.value.trim();
+                if (!scriptText && !subtitleText) {
+                    resultsContainer.innerHTML = `<div class="results"><div class="no-results">请至少输入剧本或字幕内容。</div></div>`;
+                    return;
+                }
+                const scriptLines = extractLines(scriptText);
+                const subtitleLines = parseSubtitle(subtitleText);
+                renderResults(scriptLines, subtitleLines);
+            }
+
+            compareBtn.addEventListener('click', handleCompare);
+            extractBtn.addEventListener('click', handleExtractOnly);
+            clearBtn.addEventListener('click', handleClear);
+
+            [scriptInput, subtitleInput].forEach(el => {
+                el.addEventListener('keydown', function(e) {
+                    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); handleCompare(); }
+                });
+            });
+        })();
+    </script>
+</body>
+</html>
